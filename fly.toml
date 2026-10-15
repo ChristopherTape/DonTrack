@@ -1,52 +1,47 @@
 # =========================================================================
-#  DonTrack — déploiement Fly.io
+#  DonTrack - deploiement Fly.io (version web uniquement)
 #
-#  Choisi pour une raison précise : c'est l'offre gratuite qui propose un
-#  volume persistant. La base SQLite y survit aux redéploiements, ce qui
-#  n'est pas le cas des hébergeurs à disque éphémère.
+#  Le volume monte sur /data porte la base SQLite : sans lui, les dons
+#  disparaitraient a chaque redeploiement.
 #
-#  Mise en ligne :
-#     fly launch --no-deploy --copy-config
+#  Rappel des commandes :
 #     fly volumes create dontrack_data --size 1 --region cdg
-#     fly secrets set DONTRACK_ADMIN_PASSWORD="choisissez-un-mot-de-passe"
+#     fly secrets set DONTRACK_ADMIN_PASSWORD="..."   (facultatif)
 #     fly deploy
-#
-#  Le nom ci-dessous doit etre unique sur tout Fly.io : « dontrack » est
-#  probablement deja pris. `fly launch` en proposera un libre, ou changez-le
-#  ici (par exemple dontrack-solidarite).
 # =========================================================================
 
-app = "dontrack"
-primary_region = "cdg"          # Paris ; "jnb" pour Johannesburg, "cdg" convient à l'Afrique de l'Ouest
+app = 'dontrack'
+primary_region = 'cdg'
 
 [build]
-
 [env]
-  PORT = "8080"
-  HOST = "0.0.0.0"
-  DONTRACK_DATA = "/data"
-  DONTRACK_HTTPS = "1"
-  DONTRACK_TRUST_PROXY = "1"
+  DONTRACK_DATA = '/data'
+  DONTRACK_HTTPS = '1'
+  DONTRACK_TRUST_PROXY = '1'
+  HOST = '0.0.0.0'
+  PORT = '8080'
 
-# Le volume porte la base : sans lui, les dons disparaîtraient à chaque déploiement.
 [[mounts]]
-  source = "dontrack_data"
-  destination = "/data"
+  source = 'dontrack_data'
+  destination = '/data'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "suspend"   # mise en veille quand personne ne s'en sert
-  auto_start_machines = true       # réveil à la première visite
+  auto_stop_machines = 'suspend'
+  auto_start_machines = true
   min_machines_running = 0
 
   [[http_service.checks]]
-    grace_period = "10s"
-    interval = "30s"
-    method = "GET"
-    path = "/health"
-    timeout = "5s"
+    interval = '30s'
+    timeout = '5s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
+# 256 Mo suffisent largement : serveur Node sans aucune dependance, base
+# SQLite locale. L'assistant web avait propose 2 Go, inutile et 8x plus cher.
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "256mb"
+  size = 'shared-cpu-1x'
+  cpus = 1
+  memory = '256mb'
