@@ -10,6 +10,10 @@
 #     fly volumes create dontrack_data --size 1 --region cdg
 #     fly secrets set DONTRACK_ADMIN_PASSWORD="choisissez-un-mot-de-passe"
 #     fly deploy
+#
+#  Le nom ci-dessous doit etre unique sur tout Fly.io : « dontrack » est
+#  probablement deja pris. `fly launch` en proposera un libre, ou changez-le
+#  ici (par exemple dontrack-solidarite).
 # =========================================================================
 
 app = "dontrack"
