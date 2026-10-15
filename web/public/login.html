@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>Connexion — DonTrack</title>
+<link rel="icon" href="/logo.png" />
+<link rel="stylesheet" href="/app.css" />
+<script src="/theme.js"></script>
+</head>
+<body class="auth-body">
+
+<main class="auth">
+  <form class="auth__card" id="loginForm" autocomplete="on">
+    <span class="auth__mark"><img src="/logo.png" alt="" /></span>
+    <h1 class="auth__title">DonTrack</h1>
+    <p class="auth__sub">Suivi et répartition des dons</p>
+
+    <label class="field">
+      <span class="field__label">Identifiant</span>
+      <input type="text" id="username" name="username" autocomplete="username"
+             autocapitalize="none" spellcheck="false" required />
+    </label>
+
+    <label class="field">
+      <span class="field__label">Mot de passe</span>
+      <div class="pwd">
+        <input type="password" id="password" name="password" autocomplete="current-password" required />
+        <button type="button" class="pwd__eye" id="togglePwd" aria-label="Afficher le mot de passe">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.6"/></svg>
+        </button>
+      </div>
+    </label>
+
+    <p class="formerror" id="loginError" hidden></p>
+
+    <button class="btn btn--primary btn--block" id="loginBtn" type="submit">Se connecter</button>
+
+    <p class="auth__hint">Vos identifiants vous sont remis par l'administrateur de l'association.</p>
+  </form>
+</main>
+
+<script src="/login.js"></script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+{
+  "name": "dontrack",
+  "productName": "DonTrack",
+  "version": "1.0.0",
+  "description": "Gestion et tracabilite de la repartition des dons",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win",
+    "build:portable": "electron-builder --win portable",
+    "web": "node web/server.js",
+    "web:dev": "node --watch web/server.js"
+  },
+  "author": "DonTrack",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^44.2.0",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "com.dontrack.app",
+    "productName": "DonTrack",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "assets/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.png"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "DonTrack"
+    }
+  }
+}

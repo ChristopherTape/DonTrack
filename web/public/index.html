@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="color-scheme" content="light dark" />
+<title>DonTrack</title>
+<link rel="icon" href="/logo.png" />
+<link rel="stylesheet" href="/app.css" />
+<script src="/theme.js"></script>
+</head>
+<body class="app-body is-loading">
+
+<div class="app-shell">
+
+  <!-- ======================================================== barre latérale -->
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="brand__mark"><img src="/logo.png" alt="" /></span>
+      <div class="brand__txt">
+        <b>DonTrack</b>
+        <span id="orgLabel">Suivi des dons</span>
+      </div>
+    </div>
+
+    <div class="navgroup">
+      <div class="navgroup__label">Collecte</div>
+      <button class="navitem is-active" data-screen="dons">
+        <svg viewBox="0 0 24 24"><path d="M4 8h16v12H4zM4 8l1.8-3.2h12.4L20 8M9.5 12.5h5"/></svg>
+        <span>Dons</span>
+      </button>
+      <button class="navitem" data-screen="stats">
+        <svg viewBox="0 0 24 24"><path d="M5 20V12M12 20V5M19 20v-5"/></svg>
+        <span>Statistiques</span>
+      </button>
+      <button class="navitem" data-screen="rapport">
+        <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h5"/></svg>
+        <span>Rapport</span>
+      </button>
+    </div>
+
+    <div class="navgroup admin-only" hidden>
+      <div class="navgroup__label">Administration</div>
+      <button class="navitem" data-screen="users">
+        <svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M16 11.2A3 3 0 1 0 16 5M17.2 19H20.5a4.8 4.8 0 0 0-3-4.4"/></svg>
+        <span>Utilisateurs</span>
+      </button>
+      <button class="navitem" data-screen="journal">
+        <svg viewBox="0 0 24 24"><path d="M5 4h14v16H5zM8.5 8.5h7M8.5 12h7M8.5 15.5h4"/></svg>
+        <span>Journal</span>
+      </button>
+    </div>
+
+    <div class="sidebar__foot">
+      <button class="userchip" id="userMenuBtn">
+        <span class="avatar" id="meAvatar">?</span>
+        <span class="userchip__id">
+          <b id="meName">…</b>
+          <span id="meRole"></span>
+        </span>
+        <svg class="ico" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+      </button>
+      <div class="usermenu" id="userMenu" hidden>
+        <button data-action="theme" id="themeBtn">Passer en mode nuit</button>
+        <button data-action="password">Changer mon mot de passe</button>
+        <button data-action="settings" class="admin-only" hidden>Paramètres de l'organisation</button>
+        <button data-action="logout" class="is-danger">Se déconnecter</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ======================================================== contenu -->
+  <div class="main">
+    <header class="pagehead">
+      <div class="pagehead__row">
+        <button class="iconbtn only-mobile" id="btnMobileMenu" aria-label="Menu">
+          <svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+        </button>
+        <div class="pagehead__titles">
+          <div class="pagehead__eyebrow" id="screenEyebrow">Collecte</div>
+          <h1 id="screenTitle">Dons</h1>
+          <div class="pagehead__sub" id="screenSub"></div>
+        </div>
+        <div class="pagehead__actions">
+          <button class="iconbtn only-mobile" id="btnThemeMobile" aria-label="Changer de thème">
+            <svg viewBox="0 0 24 24"><path d="M21 12.8A8.5 8.5 0 1 1 11.2 3a6.6 6.6 0 0 0 9.8 9.8z"/></svg>
+          </button>
+          <button class="btn btn--primary only-desktop" id="btnNewDon">
+            <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+            Ajouter un don
+          </button>
+        </div>
+      </div>
+
+      <div class="filterbar" id="filterbar">
+        <div class="searchfield">
+          <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+          <input type="search" id="search" placeholder="Donateur, bénéficiaire…" autocomplete="off" />
+        </div>
+        <div class="segmented" id="periodSeg">
+          <button class="seg is-active" data-period="all">Tout</button>
+          <button class="seg" data-period="30">30 jours</button>
+          <button class="seg" data-period="ytd">Cette année</button>
+        </div>
+        <select id="collectorFilter" class="admin-only" hidden aria-label="Collecteur"></select>
+      </div>
+    </header>
+
+    <main class="screens">
+
+      <!-- =================================================== DONS -->
+      <section class="screen is-active" id="screen-dons">
+        <div class="statband" id="statband"></div>
+
+        <div class="toolbar">
+          <div class="chiprow" id="statusChips">
+            <button class="chipbtn is-active" data-status="all">Tous</button>
+            <button class="chipbtn" data-status="complete">Répartis</button>
+            <button class="chipbtn" data-status="partial">Partiels</button>
+            <button class="chipbtn" data-status="none">Non répartis</button>
+          </div>
+          <div class="toolbar__right">
+            <button class="btn btn--ghost btn--sm" id="btnCsv">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10M8 9.5l4 4 4-4M4 18h16"/></svg>
+              CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="cards" id="donList"></div>
+
+        <div class="empty" id="donEmpty" hidden>
+          <span class="empty__mark"><img src="/logo.png" alt="" /></span>
+          <h3>Aucun don pour l'instant</h3>
+          <p>Enregistrez un premier don — en argent ou en nature — pour suivre sa répartition.</p>
+        </div>
+      </section>
+
+      <!-- =================================================== STATISTIQUES -->
+      <section class="screen" id="screen-stats">
+        <div class="statgrid" id="statTiles" style="margin-bottom:16px"></div>
+
+        <div class="card">
+          <div class="card__head">
+            <div>
+              <h2 id="serieTitle">Évolution journalière</h2>
+              <p id="serieSub">Collecté et réparti, jour par jour</p>
+            </div>
+            <div class="card__tools">
+              <div class="segmented segmented--sm" id="grainSeg">
+                <button class="seg is-active" data-grain="jour">Jour</button>
+                <button class="seg" data-grain="semaine">Semaine</button>
+                <button class="seg" data-grain="mois">Mois</button>
+              </div>
+              <button class="btn btn--ghost btn--sm toggle-table" data-target="chartSerie">Tableau</button>
+            </div>
+          </div>
+          <div class="chart" id="chartSerie"></div>
+          <div class="datatable" id="chartSerie-table" hidden></div>
+        </div>
+
+        <div class="card" id="natureCard" hidden>
+          <div class="card__head">
+            <div>
+              <h2>Dons en nature</h2>
+              <p>Vivres, animaux, matériel — comptés dans leur propre unité</p>
+            </div>
+          </div>
+          <div class="datatable datatable--tall" id="natureTable"></div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card__head">
+              <div><h2>Principaux bénéficiaires</h2><p>Part reçue, dons en argent</p></div>
+              <button class="btn btn--ghost btn--sm toggle-table" data-target="chartBenef">Tableau</button>
+            </div>
+            <div class="chart" id="chartBenef"></div>
+            <div class="datatable" id="chartBenef-table" hidden></div>
+          </div>
+
+          <div class="card">
+            <div class="card__head"><div><h2>Taux de répartition</h2><p>Part des fonds distribués</p></div></div>
+            <div class="chart chart--meter" id="chartMeter"></div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="card">
+            <div class="card__head">
+              <div><h2>Principaux donateurs</h2><p>Total donné, dons en argent</p></div>
+              <button class="btn btn--ghost btn--sm toggle-table" data-target="chartDonor">Tableau</button>
+            </div>
+            <div class="chart" id="chartDonor"></div>
+            <div class="datatable" id="chartDonor-table" hidden></div>
+          </div>
+
+          <div class="card admin-only" id="collectorCard" hidden>
+            <div class="card__head">
+              <div><h2>Collecte par utilisateur</h2><p>Montants enregistrés par chacun</p></div>
+              <button class="btn btn--ghost btn--sm toggle-table" data-target="chartCollector">Tableau</button>
+            </div>
+            <div class="chart" id="chartCollector"></div>
+            <div class="datatable" id="chartCollector-table" hidden></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================== RAPPORT -->
+      <section class="screen" id="screen-rapport">
+        <div class="grid-report">
+          <div class="card">
+            <div class="card__head"><div><h2>Générer un rapport</h2><p id="reportScope"></p></div></div>
+            <div class="form">
+              <label class="field">
+                <span class="field__label">Titre du rapport</span>
+                <input type="text" id="repTitle" placeholder="Rapport de répartition des dons" />
+              </label>
+              <label class="field">
+                <span class="field__label">Organisation</span>
+                <input type="text" id="repOrg" placeholder="Nom de l'association" />
+              </label>
+              <div class="checks">
+                <span class="field__label">Contenu</span>
+                <label class="check"><input type="checkbox" id="optSummary" checked /><span>Synthèse et indicateurs clés</span></label>
+                <label class="check"><input type="checkbox" id="optCharts" checked /><span>Graphiques</span></label>
+                <label class="check"><input type="checkbox" id="optDetail" checked /><span>Détail don par don</span></label>
+                <label class="check"><input type="checkbox" id="optBenef" checked /><span>Récapitulatif par bénéficiaire</span></label>
+                <label class="check"><input type="checkbox" id="optSign" /><span>Bloc de signature</span></label>
+              </div>
+              <button class="btn btn--primary btn--block" id="btnPdf">
+                <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10M8 9.5l4 4 4-4M4 18h16"/></svg>
+                Générer le PDF
+              </button>
+              <p class="hint">Le rapport s'ouvre dans la fenêtre d'impression : choisissez
+                <b>« Enregistrer au format PDF »</b> comme destination.</p>
+            </div>
+          </div>
+
+          <div class="card card--preview">
+            <div class="card__head"><div><h2>Aperçu</h2><p id="previewSub"></p></div></div>
+            <div class="preview" id="repPreview"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- =================================================== UTILISATEURS -->
+      <section class="screen" id="screen-users">
+        <div class="toolbar">
+          <p class="toolbar__note">Chaque collecteur ne voit que ses propres saisies. L'administrateur voit tout.</p>
+          <div class="toolbar__right">
+            <button class="btn btn--primary btn--sm" id="btnNewUser">
+              <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+              Nouvel utilisateur
+            </button>
+          </div>
+        </div>
+        <div class="cards cards--users" id="userList"></div>
+      </section>
+
+      <!-- =================================================== JOURNAL -->
+      <section class="screen" id="screen-journal">
+        <div class="card">
+          <div class="card__head">
+            <div><h2>Journal d'activité</h2><p>Qui a fait quoi, et quand</p></div>
+            <button class="btn btn--ghost btn--sm" id="btnRefreshAudit">Actualiser</button>
+          </div>
+          <div class="datatable datatable--tall" id="auditTable"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<button class="fab only-mobile" id="fab" aria-label="Ajouter un don">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<nav class="bottomnav only-mobile" id="bottomNav"></nav>
+
+<!-- ============================================================ FEUILLE : DON -->
+<div class="sheet" id="sheetDon" hidden>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title" id="donSheetTitle">Nouveau don</div>
+      <div class="sheet__step" id="donStepLabel">Étape 1 / 2</div>
+    </div>
+    <div class="stepbar"><span id="stepFill"></span></div>
+
+    <div class="sheet__body" id="stepDon">
+      <div class="field">
+        <span class="field__label">Forme du don</span>
+        <div class="kindswitch" id="kindSwitch">
+          <button type="button" class="kindopt is-active" data-kind="argent">
+            <svg viewBox="0 0 24 24"><rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/></svg>
+            <span>Argent<small>Montant en devise</small></span>
+          </button>
+          <button type="button" class="kindopt" data-kind="nature">
+            <svg viewBox="0 0 24 24"><path d="M4 8h16l-1.3 12H5.3zM4 8l2-4h12l2 4M9 12v4M15 12v4"/></svg>
+            <span>En nature<small>Vivres, animaux, matériel</small></span>
+          </button>
+        </div>
+      </div>
+
+      <label class="field">
+        <span class="field__label">Donateur <b>*</b></span>
+        <input type="text" id="fDonor" placeholder="Nom de la personne ou de l'association"
+               autocomplete="off" autocapitalize="words" list="donorList" />
+        <datalist id="donorList"></datalist>
+      </label>
+
+      <label class="field" id="unitField" hidden>
+        <span class="field__label">Nature du don <b>*</b></span>
+        <input type="text" id="fUnit" placeholder="Sacs de riz, chèvres, cartons de lait…"
+               autocomplete="off" list="unitList" />
+        <datalist id="unitList"></datalist>
+        <span class="hint">C'est l'unité dans laquelle la quantité sera comptée et répartie.</span>
+      </label>
+
+      <label class="field">
+        <span class="field__label" id="amountLabel">Montant du don <b>*</b></span>
+        <div class="bigamount">
+          <input type="text" inputmode="numeric" id="fAmount" placeholder="0" />
+          <span class="bigamount__cur" id="curLabel">FCFA</span>
+        </div>
+      </label>
+      <div class="chiprow" id="quickAmounts"></div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field__label">Date</span>
+          <input type="date" id="fDate" />
+        </label>
+        <label class="field">
+          <span class="field__label">Type de donateur</span>
+          <select id="fType">
+            <option value="particulier">Particulier</option>
+            <option value="association">Association</option>
+            <option value="entreprise">Entreprise</option>
+            <option value="autre">Autre…</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field" id="typeOtherField" hidden>
+        <span class="field__label">Précisez le type <b>*</b></span>
+        <input type="text" id="fTypeOther" placeholder="Mosquée, école, ONG, collectivité…"
+               autocomplete="off" list="typeOtherList" />
+        <datalist id="typeOtherList"></datalist>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Note (facultatif)</span>
+        <input type="text" id="fNote" placeholder="Référence, moyen de paiement, provenance…" />
+      </label>
+
+      <p class="formerror" id="donError" hidden></p>
+    </div>
+
+    <div class="sheet__body" id="stepAlloc" hidden>
+      <div class="allocsum" id="allocSum">
+        <div class="allocsum__row"><span id="allocTotalLabel">Montant du don</span><b id="allocTotal">0</b></div>
+        <div class="allocsum__row"><span>Attribué</span><b id="allocAssigned" class="is-assigned">0</b></div>
+        <div class="allocsum__bar"><span id="allocBarFill"></span></div>
+        <div class="allocsum__left" id="allocLeftBox"><span>Reste à répartir</span><b id="allocLeft">0</b></div>
+      </div>
+
+      <div class="alloc-list" id="allocList"></div>
+
+      <button class="btn btn--dashed btn--block" id="btnAddRow">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Ajouter un bénéficiaire
+      </button>
+
+      <div class="chiprow">
+        <button class="chipbtn" id="btnSplitEven">Répartir équitablement</button>
+        <button class="chipbtn" id="btnFillLast">Reste sur la dernière ligne</button>
+      </div>
+
+      <p class="formerror" id="allocError" hidden></p>
+    </div>
+
+    <div class="sheet__foot">
+      <button class="btn btn--ghost" id="btnBack" hidden>Retour</button>
+      <button class="btn btn--primary btn--grow" id="btnNext">Valider et répartir</button>
+      <button class="btn btn--primary btn--grow" id="btnSaveAll" hidden>Enregistrer le don</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : DÉTAIL -->
+<div class="sheet" id="sheetDetail" hidden>
+  <div class="sheet__panel sheet__panel--narrow">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title">Détail du don</div>
+    </div>
+    <div class="sheet__body" id="detailBody"></div>
+    <div class="sheet__foot">
+      <button class="btn btn--danger" id="btnDelete">Supprimer</button>
+      <button class="btn btn--primary btn--grow" id="btnEdit">Modifier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : UTILISATEUR -->
+<div class="sheet" id="sheetUser" hidden>
+  <div class="sheet__panel sheet__panel--narrow">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title" id="userSheetTitle">Nouvel utilisateur</div>
+    </div>
+    <div class="sheet__body">
+      <label class="field">
+        <span class="field__label">Nom complet <b>*</b></span>
+        <input type="text" id="uName" placeholder="Prénom et nom" autocapitalize="words" />
+      </label>
+      <label class="field">
+        <span class="field__label">Identifiant de connexion <b>*</b></span>
+        <input type="text" id="uUsername" placeholder="ex. awa.diallo" autocapitalize="none" spellcheck="false" />
+        <span class="hint">Lettres, chiffres, point, tiret — 3 caractères minimum.</span>
+      </label>
+      <label class="field">
+        <span class="field__label">Rôle</span>
+        <select id="uRole">
+          <option value="agent">Collecteur — saisit les dons, voit ses propres saisies</option>
+          <option value="admin">Administrateur — voit tout, gère les utilisateurs</option>
+        </select>
+      </label>
+      <label class="field">
+        <span class="field__label" id="uPwdLabel">Mot de passe provisoire <b>*</b></span>
+        <div class="pwd">
+          <input type="text" id="uPassword" placeholder="8 caractères minimum" autocomplete="new-password" />
+          <button type="button" class="pwd__eye" id="uGenerate" aria-label="Générer un mot de passe">
+            <svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 0 1 13.7-5.6M20 12a8 8 0 0 1-13.7 5.6"/><path d="M17 3v4h-4M7 21v-4h4"/></svg>
+          </button>
+        </div>
+        <span class="hint">L'utilisateur devra le changer à sa première connexion.</span>
+      </label>
+      <label class="check" id="uActiveRow" hidden>
+        <input type="checkbox" id="uActive" checked /><span>Compte actif</span>
+      </label>
+      <p class="formerror" id="userError" hidden></p>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn btn--ghost" data-close>Annuler</button>
+      <button class="btn btn--primary btn--grow" id="btnSaveUser">Créer le compte</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : PARAMÈTRES -->
+<div class="sheet" id="sheetSettings" hidden>
+  <div class="sheet__panel sheet__panel--narrow">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title">Paramètres de l'organisation</div>
+    </div>
+    <div class="sheet__body">
+      <label class="field">
+        <span class="field__label">Nom de l'organisation</span>
+        <input type="text" id="sOrg" placeholder="Association…" />
+      </label>
+      <label class="field">
+        <span class="field__label">Devise</span>
+        <input type="text" id="sCurrency" placeholder="FCFA" />
+        <span class="hint">Utilisée pour les dons en argent. Les dons en nature gardent leur propre unité.</span>
+      </label>
+      <p class="hint">Ces réglages s'appliquent à tous les utilisateurs.</p>
+
+      <div class="field">
+        <span class="field__label">Sauvegarde</span>
+        <button class="btn btn--ghost btn--block" id="btnBackup" type="button">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10M8 9.5l4 4 4-4M4 18h16"/></svg>
+          Télécharger une sauvegarde complète
+        </button>
+        <span class="hint">Un fichier JSON contenant tous les dons, leur répartition et
+          la liste des comptes. À conserver régulièrement, surtout si le serveur est distant.</span>
+      </div>
+
+      <p class="formerror" id="settingsError" hidden></p>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn btn--ghost" data-close>Annuler</button>
+      <button class="btn btn--primary btn--grow" id="btnSaveSettings">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : MOT DE PASSE -->
+<div class="sheet" id="sheetPassword" hidden>
+  <div class="sheet__panel sheet__panel--narrow">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close id="pwdClose" aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title">Changer mon mot de passe</div>
+    </div>
+    <div class="sheet__body">
+      <p class="hint" id="pwdForcedNote" hidden>
+        Pour votre sécurité, choisissez un nouveau mot de passe avant d'utiliser l'application.
+      </p>
+      <label class="field">
+        <span class="field__label">Mot de passe actuel</span>
+        <input type="password" id="pwdCurrent" autocomplete="current-password" />
+      </label>
+      <label class="field">
+        <span class="field__label">Nouveau mot de passe</span>
+        <input type="password" id="pwdNext" autocomplete="new-password" placeholder="8 caractères minimum" />
+      </label>
+      <label class="field">
+        <span class="field__label">Confirmer le nouveau mot de passe</span>
+        <input type="password" id="pwdConfirm" autocomplete="new-password" />
+      </label>
+      <p class="formerror" id="pwdError" hidden></p>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn btn--primary btn--grow" id="btnSavePwd">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ CONFIRMATION -->
+<div class="sheet sheet--dialog" id="dialogConfirm" hidden>
+  <div class="dialog">
+    <h3 id="cfTitle">Confirmer</h3>
+    <p id="cfMessage"></p>
+    <p class="dialog__detail" id="cfDetail"></p>
+    <div class="dialog__actions">
+      <button class="btn btn--ghost btn--grow" id="cfCancel">Annuler</button>
+      <button class="btn btn--primary btn--grow" id="cfOk">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script src="/shared/core.js"></script>
+<script src="/shared/charts.js"></script>
+<script src="/shared/report.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,9 @@
+node_modules
+dist
+build
+web/data
+mobile/signing
+mobile/android
+assets/Logo.png
+*.log
+.git

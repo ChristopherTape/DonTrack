@@ -1,0 +1,10 @@
+# Fins de ligne normalisées : le dépôt stocke en LF.
+# Indispensable pour le Dockerfile et les sources copiées dans une image Linux.
+* text=auto eol=lf
+
+# Fichiers binaires : jamais convertis.
+*.png   binary
+*.ico   binary
+*.apk   binary
+*.exe   binary
+*.keystore binary

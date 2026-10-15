@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="fr" data-theme="dark">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+<meta name="color-scheme" content="dark light" />
+<title>DonTrack</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<!-- ============================================================ barre du haut -->
+<header class="topbar">
+  <img id="brandLogo" class="topbar__logo" src="logo.png" alt="" />
+  <div class="topbar__txt">
+    <div class="topbar__name">DonTrack</div>
+    <div class="topbar__org" id="orgLabel">Suivi des dons</div>
+  </div>
+  <button class="iconbtn" id="btnSearch" aria-label="Rechercher">
+    <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+  </button>
+  <button class="iconbtn" id="btnSettings" aria-label="Paramètres">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 3v2M12 19v2M21 12h-2M5 12H3M18.4 5.6l-1.4 1.4M7 17l-1.4 1.4M18.4 18.4 17 17M7 7 5.6 5.6"/></svg>
+  </button>
+</header>
+
+<!-- filtres (repliés par défaut) -->
+<div class="filters" id="filters" hidden>
+  <div class="searchfield">
+    <svg class="ico" viewBox="0 0 24 24"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5 20 20"/></svg>
+    <input type="search" id="search" placeholder="Donateur, bénéficiaire…" autocomplete="off" />
+    <button class="searchfield__clear" id="btnClearSearch" aria-label="Effacer">
+      <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+    </button>
+  </div>
+  <div class="chiprow" id="periodChips">
+    <button class="chipbtn is-active" data-period="all">Tout</button>
+    <button class="chipbtn" data-period="ytd">Cette année</button>
+    <button class="chipbtn" data-period="30">30 jours</button>
+  </div>
+</div>
+
+<main class="screens">
+
+  <!-- ========================================================= DONS -->
+  <section class="screen is-active" id="screen-dons">
+    <div class="hero" id="hero"></div>
+
+    <div class="chiprow chiprow--status" id="statusChips">
+      <button class="chipbtn is-active" data-status="all">Tous</button>
+      <button class="chipbtn" data-status="complete">Répartis</button>
+      <button class="chipbtn" data-status="partial">Partiels</button>
+      <button class="chipbtn" data-status="none">Non répartis</button>
+    </div>
+
+    <div class="list" id="donList"></div>
+
+    <div class="empty" id="donEmpty" hidden>
+      <img class="empty__logo" src="logo.png" alt="" />
+      <h3>Aucun don pour l'instant</h3>
+      <p>Appuyez sur <b>+</b> pour enregistrer un premier don et suivre sa répartition.</p>
+    </div>
+  </section>
+
+  <!-- ========================================================= STATISTIQUES -->
+  <section class="screen" id="screen-stats">
+    <div class="statgrid" id="statTiles"></div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2>Taux de répartition</h2>
+        <p>Part des fonds effectivement distribués</p>
+      </div>
+      <div class="chart chart--meter" id="chartMeter"></div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2>Évolution mensuelle</h2>
+        <p>Collecté et réparti, par mois</p>
+        <button class="linkbtn toggle-table" data-target="chartMonthly">Voir le tableau</button>
+      </div>
+      <div class="chart" id="chartMonthly"></div>
+      <div class="datatable" id="chartMonthly-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2>Principaux bénéficiaires</h2>
+        <p>Total reçu, tous dons confondus</p>
+        <button class="linkbtn toggle-table" data-target="chartBenef">Voir le tableau</button>
+      </div>
+      <div class="chart" id="chartBenef"></div>
+      <div class="datatable" id="chartBenef-table" hidden></div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2>Principaux donateurs</h2>
+        <p>Total donné, tous dons confondus</p>
+        <button class="linkbtn toggle-table" data-target="chartDonor">Voir le tableau</button>
+      </div>
+      <div class="chart" id="chartDonor"></div>
+      <div class="datatable" id="chartDonor-table" hidden></div>
+    </div>
+  </section>
+
+  <!-- ========================================================= RAPPORT -->
+  <section class="screen" id="screen-rapport">
+    <div class="card">
+      <div class="card__head">
+        <h2>Générer un rapport</h2>
+        <p id="reportScope">Reprend la période et la recherche actives</p>
+      </div>
+      <div class="form">
+        <label class="field">
+          <span class="field__label">Titre du rapport</span>
+          <input type="text" id="repTitle" placeholder="Rapport de répartition des dons" />
+        </label>
+        <label class="field">
+          <span class="field__label">Organisation</span>
+          <input type="text" id="repOrg" placeholder="Nom de l'association" />
+        </label>
+        <div class="checks">
+          <span class="field__label">Contenu</span>
+          <label class="check"><input type="checkbox" id="optSummary" checked /><span>Synthèse et indicateurs clés</span></label>
+          <label class="check"><input type="checkbox" id="optCharts" checked /><span>Graphiques</span></label>
+          <label class="check"><input type="checkbox" id="optDetail" checked /><span>Détail don par don</span></label>
+          <label class="check"><input type="checkbox" id="optBenef" checked /><span>Récapitulatif par bénéficiaire</span></label>
+          <label class="check"><input type="checkbox" id="optSign" /><span>Bloc de signature</span></label>
+        </div>
+        <button class="btn btn--primary btn--block" id="btnPdf">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10M8 9.5l4 4 4-4M4 18h16"/></svg>
+          Générer le PDF
+        </button>
+        <p class="hint">Le PDF s'ouvre dans la fenêtre d'impression Android : choisissez <b>« Enregistrer au format PDF »</b> pour le ranger dans vos fichiers.</p>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card__head">
+        <h2>Exporter les données</h2>
+        <p>Fichiers déposés dans <b>Téléchargements</b></p>
+      </div>
+      <div class="form">
+        <button class="btn btn--ghost btn--block" id="btnCsv">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 3v10M8 9.5l4 4 4-4M4 18h16"/></svg>
+          Exporter en CSV
+        </button>
+        <button class="btn btn--ghost btn--block" id="btnBackup">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M4 7h16v12H4zM4 7l2-3h12l2 3M9 12h6"/></svg>
+          Sauvegarde complète (JSON)
+        </button>
+      </div>
+    </div>
+
+    <div class="card card--preview">
+      <div class="card__head">
+        <h2>Aperçu</h2>
+        <p id="previewSub"></p>
+      </div>
+      <div class="preview" id="repPreview"></div>
+    </div>
+  </section>
+</main>
+
+<!-- ============================================================ bouton d'action -->
+<button class="fab" id="fab" aria-label="Ajouter un don">
+  <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+</button>
+
+<!-- ============================================================ navigation basse -->
+<nav class="bottomnav">
+  <button class="navbtn is-active" data-screen="dons">
+    <svg viewBox="0 0 24 24"><path d="M4 7h16v13H4zM4 7l2-3h12l2 3M9 12h6"/></svg>
+    <span>Dons</span>
+  </button>
+  <button class="navbtn" data-screen="stats">
+    <svg viewBox="0 0 24 24"><path d="M5 20V11M12 20V4M19 20v-6"/></svg>
+    <span>Statistiques</span>
+  </button>
+  <button class="navbtn" data-screen="rapport">
+    <svg viewBox="0 0 24 24"><path d="M6 3h8l4 4v14H6zM14 3v4h4M9 13h6M9 17h6"/></svg>
+    <span>Rapport</span>
+  </button>
+</nav>
+
+<!-- ============================================================ FEUILLE : DON -->
+<div class="sheet" id="sheetDon" hidden>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title" id="donSheetTitle">Nouveau don</div>
+      <div class="sheet__step" id="donStepLabel">Étape 1 / 2</div>
+    </div>
+    <div class="stepbar"><span id="stepFill"></span></div>
+
+    <!-- étape 1 -->
+    <div class="sheet__body" id="stepDon">
+      <label class="field">
+        <span class="field__label">Donateur <b>*</b></span>
+        <input type="text" id="fDonor" placeholder="Nom de la personne ou de l'association"
+               autocomplete="off" autocapitalize="words" list="donorList" />
+        <datalist id="donorList"></datalist>
+      </label>
+
+      <label class="field">
+        <span class="field__label">Montant du don <b>*</b></span>
+        <div class="bigamount">
+          <input type="text" inputmode="numeric" id="fAmount" placeholder="0" />
+          <span class="bigamount__cur" id="curLabel">FCFA</span>
+        </div>
+      </label>
+      <div class="chiprow" id="quickAmounts"></div>
+
+      <div class="field-row">
+        <label class="field">
+          <span class="field__label">Date</span>
+          <input type="date" id="fDate" />
+        </label>
+        <label class="field">
+          <span class="field__label">Type</span>
+          <select id="fType">
+            <option value="particulier">Particulier</option>
+            <option value="association">Association</option>
+            <option value="entreprise">Entreprise</option>
+            <option value="autre">Autre</option>
+          </select>
+        </label>
+      </div>
+
+      <label class="field">
+        <span class="field__label">Note (facultatif)</span>
+        <input type="text" id="fNote" placeholder="Référence, moyen de paiement…" />
+      </label>
+
+      <p class="formerror" id="donError" hidden></p>
+    </div>
+
+    <!-- étape 2 -->
+    <div class="sheet__body" id="stepAlloc" hidden>
+      <div class="allocsum" id="allocSum">
+        <div class="allocsum__row">
+          <span>Montant du don</span>
+          <b id="allocTotal">0</b>
+        </div>
+        <div class="allocsum__row">
+          <span>Attribué</span>
+          <b id="allocAssigned" class="is-assigned">0</b>
+        </div>
+        <div class="allocsum__bar"><span id="allocBarFill"></span></div>
+        <div class="allocsum__left" id="allocLeftBox">
+          <span>Reste à répartir</span>
+          <b id="allocLeft">0</b>
+        </div>
+      </div>
+
+      <div class="alloc-list" id="allocList"></div>
+
+      <button class="btn btn--dashed btn--block" id="btnAddRow">
+        <svg class="ico" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+        Ajouter un bénéficiaire
+      </button>
+
+      <div class="chiprow">
+        <button class="chipbtn" id="btnSplitEven">Répartir équitablement</button>
+        <button class="chipbtn" id="btnFillLast">Reste sur la dernière ligne</button>
+      </div>
+
+      <p class="formerror" id="allocError" hidden></p>
+    </div>
+
+    <div class="sheet__foot">
+      <button class="btn btn--ghost" id="btnBack" hidden>Retour</button>
+      <button class="btn btn--primary btn--grow" id="btnNext">Valider et répartir</button>
+      <button class="btn btn--primary btn--grow" id="btnSaveAll" hidden>Enregistrer le don</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : DÉTAIL -->
+<div class="sheet" id="sheetDetail" hidden>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title">Détail du don</div>
+    </div>
+    <div class="sheet__body" id="detailBody"></div>
+    <div class="sheet__foot">
+      <button class="btn btn--ghost btn--danger" id="btnDelete">Supprimer</button>
+      <button class="btn btn--primary btn--grow" id="btnEdit">Modifier</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ FEUILLE : PARAMÈTRES -->
+<div class="sheet" id="sheetSettings" hidden>
+  <div class="sheet__panel">
+    <div class="sheet__head">
+      <button class="iconbtn" data-close aria-label="Fermer">
+        <svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg>
+      </button>
+      <div class="sheet__title">Paramètres</div>
+    </div>
+    <div class="sheet__body">
+      <label class="field">
+        <span class="field__label">Nom de l'organisation</span>
+        <input type="text" id="sOrg" placeholder="Association…" />
+      </label>
+      <div class="field-row">
+        <label class="field">
+          <span class="field__label">Devise</span>
+          <input type="text" id="sCurrency" placeholder="FCFA" />
+        </label>
+        <label class="field">
+          <span class="field__label">Thème</span>
+          <select id="sTheme">
+            <option value="dark">Sombre</option>
+            <option value="light">Clair</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="settings-block">
+        <h3>Données</h3>
+        <p class="hint" id="dataInfo"></p>
+        <button class="btn btn--ghost btn--block" id="btnImport">
+          <svg class="ico" viewBox="0 0 24 24"><path d="M12 15V5M8 8.5l4-4 4 4M4 19h16"/></svg>
+          Importer une sauvegarde
+        </button>
+      </div>
+
+      <div class="settings-block">
+        <h3>À propos</h3>
+        <p class="hint">DonTrack <span id="appVersion">1.0.0</span> — vos données restent sur cet appareil, aucune connexion n'est utilisée.</p>
+      </div>
+    </div>
+    <div class="sheet__foot">
+      <button class="btn btn--primary btn--grow" id="btnSaveSettings">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ CONFIRMATION -->
+<div class="sheet sheet--dialog" id="dialogConfirm" hidden>
+  <div class="dialog">
+    <h3 id="cfTitle">Confirmer</h3>
+    <p id="cfMessage"></p>
+    <p class="dialog__detail" id="cfDetail"></p>
+    <div class="dialog__actions">
+      <button class="btn btn--ghost btn--grow" id="cfCancel">Annuler</button>
+      <button class="btn btn--primary btn--grow" id="cfOk">Confirmer</button>
+    </div>
+  </div>
+</div>
+
+<div class="toasts" id="toasts"></div>
+<div class="tooltip" id="tooltip" hidden></div>
+
+<script src="logo-data.js"></script>
+<script src="core.js"></script>
+<script src="charts.js"></script>
+<script src="report.js"></script>
+<script src="platform.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
