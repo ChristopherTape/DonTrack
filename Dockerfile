@@ -13,8 +13,11 @@ RUN apk add --no-cache tini
 
 WORKDIR /app
 
+# Seule la version web est hébergée. On n'embarque donc que le serveur,
+# ses pages, et le noyau métier partagé — ni le code Electron (src/main,
+# src/renderer) ni l'application Android.
 COPY package.json ./
-COPY src ./src
+COPY src/shared ./src/shared
 COPY web/server.js ./web/server.js
 COPY web/lib ./web/lib
 COPY web/public ./web/public

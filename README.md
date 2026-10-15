@@ -232,8 +232,12 @@ que le serveur est arrêté.
 
 ### Mettre l'application en ligne
 
-L'application tient dans une image Docker de quelques mégaoctets : **aucune
-dépendance npm**, SQLite et le hachage des mots de passe viennent de Node.
+**Seule la version web est hébergée.** Les versions desktop et Android sont des
+applications installées sur l'appareil : elles ne sont pas concernées. L'image
+de production ne contient d'ailleurs que le serveur, ses pages et le noyau
+métier partagé — ni le code Electron, ni l'application Android (environ 500 Ko
+au total, **aucune dépendance npm** : SQLite et le hachage des mots de passe
+viennent de Node lui-même).
 
 #### Le point qui décide de l'hébergeur
 

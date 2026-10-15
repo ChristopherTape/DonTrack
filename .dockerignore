@@ -1,9 +1,21 @@
+# Le contexte de construction ne garde que ce qui sert au serveur web.
 node_modules
 dist
 build
 web/data
-mobile/signing
-mobile/android
-assets/Logo.png
+
+# Applications desktop et Android : hors ligne, jamais hébergées.
+src/main
+src/renderer
+mobile
+tools
+assets
+Logo.png
+
+# Divers
 *.log
 .git
+.gitattributes
+.gitignore
+fly.toml
+README.md
