@@ -1,0 +1,46 @@
+# =========================================================================
+#  DonTrack — déploiement Render (offre gratuite, sans carte bancaire)
+#
+#  Le disque de Render est éphémère : la base ne peut pas y vivre. Elle est
+#  donc hébergée chez Turso (SQLite managé, gratuit, sans carte) et désignée
+#  par DONTRACK_DB_URL. Les données survivent ainsi à tous les
+#  redéploiements et à toutes les mises en veille.
+#
+#  Mise en ligne :
+#    1. Créer la base      → https://turso.tech  (plan gratuit)
+#         turso db create dontrack
+#         turso db show dontrack --url          → DONTRACK_DB_URL
+#         turso db tokens create dontrack       → DONTRACK_DB_TOKEN
+#    2. Sur https://dashboard.render.com :
+#         New + → Blueprint → choisir ce dépôt GitHub
+#         renseigner les trois variables marquées sync: false
+#    3. Render construit le Dockerfile et publie l'adresse https://…onrender.com
+# =========================================================================
+
+services:
+  - type: web
+    name: dontrack
+    runtime: docker
+    plan: free
+    region: frankfurt          # le plus proche de l'Afrique de l'Ouest
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true           # un push sur main redéploie
+
+    envVars:
+      - key: PORT
+        value: 8080
+      - key: HOST
+        value: 0.0.0.0
+      - key: DONTRACK_HTTPS
+        value: "1"             # Render fournit le HTTPS : cookie Secure + HSTS
+      - key: DONTRACK_TRUST_PROXY
+        value: "1"             # compter les tentatives par visiteur réel
+
+      # --- à renseigner dans le tableau de bord Render ---
+      - key: DONTRACK_DB_URL
+        sync: false            # libsql://dontrack-<compte>.turso.io
+      - key: DONTRACK_DB_TOKEN
+        sync: false            # jeton d'accès Turso
+      - key: DONTRACK_ADMIN_PASSWORD
+        sync: false            # mot de passe du premier administrateur

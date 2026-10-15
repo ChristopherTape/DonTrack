@@ -205,14 +205,19 @@ navigateur de leur téléphone, sur le même réseau Wi-Fi.
 
 ### Où sont les données
 
-Une base SQLite unique, côté serveur :
+Une base SQLite unique, côté serveur. Par défaut un simple fichier :
 
 ```
 web/data/dontrack.db          (DONTRACK_DATA pour choisir un autre dossier)
 ```
 
-Sauvegarde : copiez ce fichier (ainsi que `dontrack.db-wal` s'il existe) pendant
-que le serveur est arrêté.
+En ligne, la même base peut être distante — voir *Mettre l'application en
+ligne*. Le code est identique dans les deux cas : seule `DONTRACK_DB_URL`
+change.
+
+Sauvegarde du fichier local : copiez-le (ainsi que `dontrack.db-wal` s'il
+existe) pendant que le serveur est arrêté. Dans tous les cas, l'administrateur
+peut télécharger une sauvegarde JSON depuis *Paramètres de l'organisation*.
 
 ### Sécurité
 
@@ -233,93 +238,98 @@ que le serveur est arrêté.
 ### Mettre l'application en ligne
 
 **Seule la version web est hébergée.** Les versions desktop et Android sont des
-applications installées sur l'appareil : elles ne sont pas concernées. L'image
-de production ne contient d'ailleurs que le serveur, ses pages et le noyau
-métier partagé — ni le code Electron, ni l'application Android (environ 500 Ko
-au total, **aucune dépendance npm** : SQLite et le hachage des mots de passe
-viennent de Node lui-même).
+applications installées sur l'appareil. L'image de production ne contient que
+le serveur, ses pages et le noyau métier partagé — ni le code Electron, ni
+l'application Android.
 
 #### Le point qui décide de l'hébergeur
 
-La base est un fichier. Il lui faut donc un **disque persistant**. Beaucoup
-d'offres gratuites (Render free, Koyeb, Railway sans crédit) fournissent un
+La base est un fichier SQLite. Or les offres d'hébergement gratuites ont un
 disque **éphémère** : il est remis à zéro à chaque redéploiement et à chaque
-redémarrage de l'instance. Sur un registre de dons, cela veut dire *perdre
-toutes les saisies* sans prévenir. À éviter.
+réveil de l'instance. Sur un registre de dons, cela veut dire perdre toutes les
+saisies sans prévenir.
 
-**Fly.io** est retenu pour cette raison : son offre gratuite inclut un volume
-persistant de 3 Go, le HTTPS automatique, et la mise en veille de l'instance
-quand personne ne s'en sert (le volume, lui, reste).
+La solution retenue sépare les deux : l'application tourne sur un hébergeur
+gratuit, la base vit chez un service de base de données gratuit. Le code ne voit
+aucune différence — `DONTRACK_DB_URL` désigne soit un fichier local
+(`file:…`, pour le poste de travail), soit une base distante (`libsql://…`).
 
-#### Déployer sur Fly.io
+#### Render + Turso — gratuit, sans carte bancaire
+
+| | Service | Offre gratuite |
+|---|---|---|
+| Application | [Render](https://render.com) | sans carte ; veille après 15 min d'inactivité, ~1 min au réveil |
+| Base de données | [Turso](https://turso.tech) | sans carte ; 5 Go, 500 millions de lectures par mois |
+
+**1. Créer la base**
 
 ```bash
-# 1. Installer l'outil (une seule fois)
-#    Windows PowerShell :
-iwr https://fly.io/install.ps1 -useb | iex
-
-# 2. Créer le compte et se connecter
-fly auth signup        # ou : fly auth login
-
-# 3. Depuis le dossier du projet
-fly launch --no-deploy --copy-config      # garde le fly.toml fourni
-fly volumes create dontrack_data --size 1 --region cdg
-
-# 4. Choisir le mot de passe du premier administrateur
-fly secrets set DONTRACK_ADMIN_PASSWORD="votre-mot-de-passe-solide"
-
-# 5. Mettre en ligne
-fly deploy
-fly open                # ouvre https://<votre-app>.fly.dev
+# https://turso.tech → créer un compte (aucune carte demandée)
+turso db create dontrack
+turso db show dontrack --url        # → DONTRACK_DB_URL  (libsql://…)
+turso db tokens create dontrack     # → DONTRACK_DB_TOKEN
 ```
 
-Le nom de l'application et la région se changent dans `fly.toml`
-(`cdg` = Paris, bien placé pour l'Afrique de l'Ouest ; `jnb` = Johannesburg).
+La console web de Turso donne les mêmes informations sans installer d'outil.
 
-Si vous ne définissez pas `DONTRACK_ADMIN_PASSWORD`, un mot de passe est tiré
-au hasard et affiché **une seule fois** dans les journaux : `fly logs`.
+**2. Déployer l'application**
 
-#### Variables d'environnement
+Sur [dashboard.render.com](https://dashboard.render.com) : **New + → Blueprint**,
+choisir le dépôt GitHub. Render lit `render.yaml`, construit le `Dockerfile` et
+demande les trois valeurs à renseigner :
 
-| Variable | Rôle | Valeur en ligne |
-|---|---|---|
-| `PORT` | port d'écoute | `8080` |
-| `DONTRACK_DATA` | dossier de la base | `/data` (le volume) |
-| `DONTRACK_HTTPS` | cookie de session en `Secure` + HSTS | `1` |
-| `DONTRACK_TRUST_PROXY` | lire l'IP réelle derrière le proxy | `1` |
-| `DONTRACK_ADMIN_PASSWORD` | mot de passe du premier administrateur | votre choix |
+| Variable | Valeur |
+|---|---|
+| `DONTRACK_DB_URL` | l'adresse `libsql://…` de l'étape 1 |
+| `DONTRACK_DB_TOKEN` | le jeton de l'étape 1 |
+| `DONTRACK_ADMIN_PASSWORD` | le mot de passe du premier administrateur |
 
-Ces quatre premières sont déjà posées par le `Dockerfile` et le `fly.toml`.
+Le reste (port, HTTPS, proxy, sonde `/health`) est déjà dans `render.yaml`.
+
+Si `DONTRACK_ADMIN_PASSWORD` est laissé vide, un mot de passe est tiré au hasard
+et affiché **une seule fois** dans les journaux Render.
+
+**La mise en veille.** Sans visite pendant 15 minutes, Render endort le service ;
+la visite suivante attend environ une minute. C'est le prix du gratuit, et cela
+ne touche pas aux données : elles sont chez Turso.
 
 #### Autres hébergeurs
 
-- **Oracle Cloud « Always Free »** — une vraie machine virtuelle, gratuite sans
-  limite de durée et avec un disque réel. Plus de travail d'installation
-  (Docker à poser soi-même, HTTPS à configurer avec Caddy ou nginx), mais
-  aucune contrainte de quota.
-- **Render / Koyeb en gratuit** — déploiement très simple, mais disque
-  éphémère : à ne retenir que pour une démonstration, jamais pour des données
-  réelles.
+- **Fly.io** (`fly.toml` fourni) — volume persistant, donc la base peut rester un
+  simple fichier et Turso devient inutile. Pas de mise en veille gênante, mais
+  **une carte bancaire est exigée** et les cartes prépayées sont refusées.
+  Comptez quelques dizaines de centimes à ~2 $/mois.
+- **Oracle Cloud « Always Free »** — une vraie machine virtuelle gratuite sans
+  limite de durée. Davantage d'installation (Docker et HTTPS à poser soi-même).
 - **Votre propre machine** — `npm run web` suffit sur le réseau de
-  l'association, sans rien payer ni exposer à Internet.
+  l'association, sans compte ni mise en ligne.
+
+#### Variables d'environnement
+
+| Variable | Rôle | Hors ligne | En ligne |
+|---|---|---|---|
+| `DONTRACK_DB_URL` | emplacement de la base | `file:…` (par défaut) | `libsql://…` |
+| `DONTRACK_DB_TOKEN` | jeton de la base distante | — | jeton Turso |
+| `DONTRACK_DATA` | dossier du fichier local | `web/data` | inutilisé |
+| `PORT` | port d'écoute | `8080` | `8080` |
+| `DONTRACK_HTTPS` | cookie `Secure` + HSTS | — | `1` |
+| `DONTRACK_TRUST_PROXY` | lire l'IP réelle du visiteur | — | `1` |
+| `DONTRACK_ADMIN_PASSWORD` | mot de passe initial | facultatif | recommandé |
 
 #### Sauvegardes
 
-Une fois en ligne, vous n'avez plus accès au fichier de base. L'administrateur
-dispose donc, dans *Paramètres de l'organisation*, d'un bouton **« Télécharger
-une sauvegarde complète »** : un fichier JSON contenant tous les dons, leur
-répartition et la liste des comptes (jamais les mots de passe). Prenez-en une
-régulièrement.
-
-En ligne de commande : `fly ssh console -C "cat /data/dontrack.db" > sauvegarde.db`.
+Une fois en ligne, le fichier de base n'est plus à portée de main.
+L'administrateur dispose donc, dans *Paramètres de l'organisation*, d'un bouton
+**« Télécharger une sauvegarde complète »** : un fichier JSON contenant tous les
+dons, leur répartition et la liste des comptes — jamais les mots de passe.
+Prenez-en une régulièrement.
 
 #### Sécurité en accès public
 
 - Le mot de passe du premier administrateur n'est **jamais** une valeur connue :
   il est fourni par vous ou tiré au hasard, et son changement est exigé à la
   première connexion.
-- HTTPS est assuré par l'hébergeur ; `DONTRACK_HTTPS=1` ajoute `Secure` au
-  cookie de session et l'en-tête HSTS.
+- `DONTRACK_HTTPS=1` ajoute `Secure` au cookie de session et l'en-tête HSTS.
 - Le blocage après tentatives répétées compte par **adresse réelle du
   visiteur** grâce à `DONTRACK_TRUST_PROXY=1`, et non par celle du proxy.
 - La sonde `/health` ne touche ni aux sessions ni à la base.

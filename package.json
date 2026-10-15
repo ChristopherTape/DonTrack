@@ -42,5 +42,8 @@
       "createDesktopShortcut": true,
       "shortcutName": "DonTrack"
     }
+  },
+  "dependencies": {
+    "@libsql/client": "^0.18.0"
   }
 }

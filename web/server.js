@@ -174,7 +174,7 @@ async function handleApi(req, res, url) {
 
   const cookies = auth.parseCookies(req.headers.cookie);
   const sessionId = cookies[auth.COOKIE];
-  const user = db.sessionUser(sessionId);
+  const user = await db.sessionUser(sessionId);
 
   if (!found.route.open && !user) {
     return sendJson(res, 401, { error: 'Session expirée. Reconnectez-vous.' });
@@ -244,7 +244,7 @@ const server = http.createServer(async (req, res) => {
     return res.end('ok');
   }
 
-  const session = db.sessionUser(auth.parseCookies(req.headers.cookie)[auth.COOKIE]);
+  const session = await db.sessionUser(auth.parseCookies(req.headers.cookie)[auth.COOKIE]);
 
   if (p === '/') return redirect(res, session ? '/app' : '/connexion');
   if (p === '/connexion') {
@@ -274,44 +274,54 @@ function localAddresses() {
   return out;
 }
 
-const firstAdmin = auth.ensureFirstAdmin();
+/* Le schéma est créé — ou complété — avant d'accepter la moindre requête. */
+async function start() {
+  const stockage = await db.init();
+  const firstAdmin = await auth.ensureFirstAdmin();
 
-setInterval(() => {
-  try { db.purgeSessions(); } catch (_) { /* ignore */ }
-}, 30 * 60 * 1000).unref();
+  setInterval(() => {
+    db.purgeSessions().catch(() => { /* réessayé au tour suivant */ });
+  }, 30 * 60 * 1000).unref();
 
-server.listen(PORT, HOST, () => {
-  const lines = [];
-  lines.push('');
-  lines.push('  DonTrack — serveur web démarré');
-  lines.push('');
-  lines.push(`  Sur ce poste ......... http://localhost:${PORT}`);
-  localAddresses().forEach((ip) => lines.push(`  Sur le réseau local .. http://${ip}:${PORT}`));
-  lines.push(`  Base de données ...... ${db.DB_FILE}`);
-  lines.push('');
-
-  if (firstAdmin) {
-    lines.push('  ==================================================');
-    lines.push('   PREMIERE CONNEXION - compte administrateur');
-    lines.push('  --------------------------------------------------');
-    lines.push(`   identifiant  : ${firstAdmin.username}`);
-    lines.push(`   mot de passe : ${firstAdmin.password}`);
+  server.listen(PORT, HOST, () => {
+    const lines = [];
     lines.push('');
-    if (!firstAdmin.fromEnv) {
-      lines.push('   Mot de passe tire au hasard : notez-le maintenant,');
-      lines.push('   il ne sera plus affiche. (DONTRACK_ADMIN_PASSWORD');
-      lines.push('   permet de le choisir vous-meme.)');
+    lines.push('  DonTrack — serveur web démarré');
+    lines.push('');
+    lines.push(`  Sur ce poste ......... http://localhost:${PORT}`);
+    localAddresses().forEach((ip) => lines.push(`  Sur le réseau local .. http://${ip}:${PORT}`));
+    lines.push(`  Données .............. ${stockage.storage}`);
+    if (stockage.remote) lines.push('  (base distante : elle survit aux redéploiements)');
+    lines.push('');
+
+    if (firstAdmin) {
+      lines.push('  ==================================================');
+      lines.push('   PREMIERE CONNEXION - compte administrateur');
+      lines.push('  --------------------------------------------------');
+      lines.push(`   identifiant  : ${firstAdmin.username}`);
+      lines.push(`   mot de passe : ${firstAdmin.password}`);
+      lines.push('');
+      if (!firstAdmin.fromEnv) {
+        lines.push('   Mot de passe tire au hasard : notez-le maintenant,');
+        lines.push('   il ne sera plus affiche. (DONTRACK_ADMIN_PASSWORD');
+        lines.push('   permet de le choisir vous-meme.)');
+      }
+      lines.push('   Son changement est exige des la premiere connexion.');
+      lines.push('  ==================================================');
+      lines.push('');
     }
-    lines.push('   Son changement est exige des la premiere connexion.');
-    lines.push('  ==================================================');
-    lines.push('');
-  }
-  if (!BEHIND_HTTPS) {
-    lines.push('  Note : en accès hors du réseau local, placez le serveur');
-    lines.push('         derrière HTTPS et démarrez avec DONTRACK_HTTPS=1.');
-    lines.push('');
-  }
-  console.log(lines.join('\n'));
+    if (!BEHIND_HTTPS) {
+      lines.push('  Note : en accès hors du réseau local, placez le serveur');
+      lines.push('         derrière HTTPS et démarrez avec DONTRACK_HTTPS=1.');
+      lines.push('');
+    }
+    console.log(lines.join('\n'));
+  });
+}
+
+start().catch((err) => {
+  console.error('Démarrage impossible :', err.message);
+  process.exit(1);
 });
 
 /* Les hébergeurs envoient SIGTERM avant de recycler l'instance :

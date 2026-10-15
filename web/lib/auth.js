@@ -89,8 +89,8 @@ function sessionCookie(value, maxAgeSec, secure) {
  * passe par défaut connu : l'application peut être exposée sur Internet
  * avant que son propriétaire ne s'y connecte.
  */
-function ensureFirstAdmin() {
-  const existing = db.listUsers();
+async function ensureFirstAdmin() {
+  const existing = await db.listUsers();
   if (existing.length) return null;
 
   const fromEnv = String(process.env.DONTRACK_ADMIN_PASSWORD || '').trim();
@@ -99,14 +99,14 @@ function ensureFirstAdmin() {
   }
   const password = fromEnv || randomPassword();
   const { hash, salt } = hashPassword(password);
-  const user = db.createUser({
+  const user = await db.createUser({
     username: 'admin',
     name: 'Administrateur',
     role: 'admin',
     hash, salt,
     mustChange: true
   });
-  db.logAction(null, 'creation', 'utilisateur', user.id, 'compte administrateur initial');
+  await db.logAction(null, 'creation', 'utilisateur', user.id, 'compte administrateur initial');
   return { username: 'admin', password, fromEnv: !!fromEnv };
 }
 

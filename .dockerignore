@@ -4,7 +4,7 @@ dist
 build
 web/data
 
-# Applications desktop et Android : hors ligne, jamais hébergées.
+# Applications desktop et Android : jamais hébergées.
 src/main
 src/renderer
 mobile
@@ -18,4 +18,5 @@ Logo.png
 .gitattributes
 .gitignore
 fly.toml
+render.yaml
 README.md

@@ -1,29 +1,43 @@
 /* =========================================================================
-   DonTrack Web — base de données centralisée (SQLite intégré à Node)
+   DonTrack Web — base de données centralisée
 
-   Toutes les saisies de tous les collecteurs atterrissent dans ce fichier
-   unique, côté serveur. Aucun poste ne garde de copie locale.
+   Une seule couche, deux usages :
+     • en local  : un fichier SQLite ordinaire (file:…), rien à installer ;
+     • en ligne  : une base Turso (libsql://…), car les hébergeurs gratuits
+                   effacent leur disque à chaque redémarrage.
+
+   Le choix se fait par DONTRACK_DB_URL ; le code au-dessus ne voit aucune
+   différence. Toutes les fonctions sont asynchrones : un accès distant
+   passe par le réseau.
    ========================================================================= */
 
 'use strict';
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { DatabaseSync } = require('node:sqlite');
+const { createClient } = require('@libsql/client');
 
 const DATA_DIR = process.env.DONTRACK_DATA || path.join(__dirname, '..', 'data');
 const DB_FILE = path.join(DATA_DIR, 'dontrack.db');
 
-fs.mkdirSync(DATA_DIR, { recursive: true });
+const DB_URL = process.env.DONTRACK_DB_URL || ('file:' + DB_FILE.replace(/\\/g, '/'));
+const DB_TOKEN = process.env.DONTRACK_DB_TOKEN || undefined;
+const IS_REMOTE = !DB_URL.startsWith('file:');
 
-const db = new DatabaseSync(DB_FILE);
+if (!IS_REMOTE) fs.mkdirSync(DATA_DIR, { recursive: true });
 
-// WAL : lectures concurrentes pendant qu'un collecteur enregistre.
-db.exec('PRAGMA journal_mode = WAL');
-db.exec('PRAGMA foreign_keys = ON');
-db.exec('PRAGMA busy_timeout = 5000');
+const client = createClient({ url: DB_URL, authToken: DB_TOKEN });
 
-db.exec(`
+/** Où vivent les données, pour l'affichage au démarrage. */
+const describeStorage = () => (IS_REMOTE ? DB_URL.replace(/\?.*$/, '') : DB_FILE);
+
+/* ----------------------------------------------------------- accès bas niveau */
+
+const run = (sql, args) => client.execute(args ? { sql, args } : sql);
+const all = async (sql, args) => (await run(sql, args)).rows;
+const one = async (sql, args) => (await all(sql, args))[0] || null;
+
+const SCHEMA = `
 CREATE TABLE IF NOT EXISTS users (
   id            TEXT PRIMARY KEY,
   username      TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -91,21 +105,31 @@ CREATE INDEX IF NOT EXISTS idx_don_creator ON donations(created_by);
 CREATE INDEX IF NOT EXISTS idx_alloc_don   ON allocations(donation_id);
 CREATE INDEX IF NOT EXISTS idx_audit_at    ON audit(at);
 CREATE INDEX IF NOT EXISTS idx_sess_exp    ON sessions(expires_at);
-`);
+`;
 
-/* ----------------------------------------------------------- migrations */
+/** Création du schéma et rattrapage des bases antérieures. */
+async function init() {
+  if (!IS_REMOTE) {
+    // Réglages utiles au fichier local ; sans objet sur une base distante.
+    for (const p of ['PRAGMA journal_mode = WAL', 'PRAGMA busy_timeout = 5000']) {
+      try { await run(p); } catch (_) { /* ignoré */ }
+    }
+  }
+  try { await run('PRAGMA foreign_keys = ON'); } catch (_) { /* ignoré */ }
 
-// Les bases créées avant la prise en charge des dons en nature reçoivent
-// les colonnes manquantes ; les dons existants restent des dons en argent.
-(function migrate() {
-  const cols = db.prepare('PRAGMA table_info(donations)').all().map((c) => c.name);
-  const add = (name, ddl) => {
-    if (!cols.includes(name)) db.exec(`ALTER TABLE donations ADD COLUMN ${ddl}`);
+  await client.executeMultiple(SCHEMA);
+
+  // Colonnes ajoutées après coup (dons en nature, précision du type).
+  const cols = (await all('PRAGMA table_info(donations)')).map((c) => c.name);
+  const add = async (name, ddl) => {
+    if (!cols.includes(name)) await run(`ALTER TABLE donations ADD COLUMN ${ddl}`);
   };
-  add('type_other', "type_other TEXT NOT NULL DEFAULT ''");
-  add('kind', "kind TEXT NOT NULL DEFAULT 'argent'");
-  add('unit', "unit TEXT NOT NULL DEFAULT ''");
-})();
+  await add('type_other', "type_other TEXT NOT NULL DEFAULT ''");
+  await add('kind', "kind TEXT NOT NULL DEFAULT 'argent'");
+  await add('unit', "unit TEXT NOT NULL DEFAULT ''");
+
+  return { remote: IS_REMOTE, storage: describeStorage() };
+}
 
 /* ----------------------------------------------------------- utilitaires */
 
@@ -114,90 +138,88 @@ const nowIso = () => new Date().toISOString();
 
 /* ----------------------------------------------------------- réglages */
 
-function getSetting(key, fallback) {
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+async function getSetting(key, fallback) {
+  const row = await one('SELECT value FROM settings WHERE key = ?', [key]);
   return row ? row.value : fallback;
 }
 
-function setSetting(key, value) {
-  db.prepare(`INSERT INTO settings (key, value) VALUES (?, ?)
-              ON CONFLICT(key) DO UPDATE SET value = excluded.value`).run(key, String(value));
-}
+const setSetting = (key, value) =>
+  run(`INSERT INTO settings (key, value) VALUES (?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value`, [key, String(value)]);
 
-function allSettings() {
+async function allSettings() {
   return {
-    org: getSetting('org', ''),
-    currency: getSetting('currency', 'FCFA')
+    org: await getSetting('org', ''),
+    currency: await getSetting('currency', 'FCFA')
   };
 }
 
 /* ----------------------------------------------------------- utilisateurs */
 
-function listUsers() {
-  return db.prepare(`
-    SELECT u.id, u.username, u.name, u.role, u.active, u.must_change, u.created_at, u.last_login,
-           (SELECT COUNT(*) FROM donations d WHERE d.created_by = u.id) AS donations,
-           (SELECT COALESCE(SUM(d.amount), 0) FROM donations d WHERE d.created_by = u.id) AS collected
-    FROM users u ORDER BY u.role = 'admin' DESC, u.name COLLATE NOCASE`).all();
-}
+const listUsers = () => all(`
+  SELECT u.id, u.username, u.name, u.role, u.active, u.must_change, u.created_at, u.last_login,
+         (SELECT COUNT(*) FROM donations d WHERE d.created_by = u.id) AS donations,
+         (SELECT COALESCE(SUM(d.amount), 0) FROM donations d
+            WHERE d.created_by = u.id AND d.kind = 'argent') AS collected
+  FROM users u ORDER BY u.role = 'admin' DESC, u.name COLLATE NOCASE`);
 
 const userByName = (username) =>
-  db.prepare('SELECT * FROM users WHERE username = ? COLLATE NOCASE').get(username);
+  one('SELECT * FROM users WHERE username = ? COLLATE NOCASE', [username]);
 
-const userById = (id) => db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+const userById = (id) => one('SELECT * FROM users WHERE id = ?', [id]);
 
-function createUser({ username, name, role, hash, salt, mustChange }) {
+async function createUser({ username, name, role, hash, salt, mustChange }) {
   const id = uid('usr');
-  db.prepare(`INSERT INTO users (id, username, name, role, pass_hash, pass_salt, must_change, active, created_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`)
-    .run(id, username, name, role, hash, salt, mustChange ? 1 : 0, nowIso());
+  await run(`INSERT INTO users (id, username, name, role, pass_hash, pass_salt, must_change, active, created_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?)`,
+    [id, username, name, role, hash, salt, mustChange ? 1 : 0, nowIso()]);
   return userById(id);
 }
 
-function updateUser(id, fields) {
+async function updateUser(id, fields) {
   const allowed = ['name', 'role', 'active', 'pass_hash', 'pass_salt', 'must_change', 'last_login', 'username'];
   const keys = Object.keys(fields).filter((k) => allowed.includes(k));
   if (!keys.length) return userById(id);
-  const sql = `UPDATE users SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`;
-  db.prepare(sql).run(...keys.map((k) => fields[k]), id);
+  await run(`UPDATE users SET ${keys.map((k) => `${k} = ?`).join(', ')} WHERE id = ?`,
+    keys.map((k) => fields[k]).concat(id));
   return userById(id);
 }
 
-function deleteUser(id) {
-  // Les dons restent : on ne perd jamais une trace de collecte.
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id);
-  db.prepare('UPDATE users SET active = 0 WHERE id = ?').run(id);
+/** Désactivation plutôt que suppression : les dons saisis restent traçables. */
+async function deleteUser(id) {
+  await run('DELETE FROM sessions WHERE user_id = ?', [id]);
+  await run('UPDATE users SET active = 0 WHERE id = ?', [id]);
 }
 
-const countAdmins = () =>
-  db.prepare("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1").get().n;
+const countAdmins = async () =>
+  Number((await one("SELECT COUNT(*) AS n FROM users WHERE role = 'admin' AND active = 1")).n);
 
 /* ----------------------------------------------------------- sessions */
 
-function createSession(userId, agent, ttlMs) {
+async function createSession(userId, agent, ttlMs) {
   const id = crypto.randomBytes(32).toString('base64url');
-  db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at, agent) VALUES (?, ?, ?, ?, ?)')
-    .run(id, userId, nowIso(), Date.now() + ttlMs, String(agent || '').slice(0, 200));
+  await run('INSERT INTO sessions (id, user_id, created_at, expires_at, agent) VALUES (?, ?, ?, ?, ?)',
+    [id, userId, nowIso(), Date.now() + ttlMs, String(agent || '').slice(0, 200)]);
   return id;
 }
 
-function sessionUser(sessionId) {
+async function sessionUser(sessionId) {
   if (!sessionId) return null;
-  const row = db.prepare(`
+  const row = await one(`
     SELECT s.expires_at, u.* FROM sessions s
     JOIN users u ON u.id = s.user_id
-    WHERE s.id = ?`).get(sessionId);
+    WHERE s.id = ?`, [sessionId]);
   if (!row) return null;
-  if (row.expires_at < Date.now() || !row.active) {
-    db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+  if (Number(row.expires_at) < Date.now() || !row.active) {
+    await run('DELETE FROM sessions WHERE id = ?', [sessionId]);
     return null;
   }
   return row;
 }
 
-const dropSession = (id) => db.prepare('DELETE FROM sessions WHERE id = ?').run(id);
-const dropUserSessions = (userId) => db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
-const purgeSessions = () => db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
+const dropSession = (id) => run('DELETE FROM sessions WHERE id = ?', [id]);
+const dropUserSessions = (userId) => run('DELETE FROM sessions WHERE user_id = ?', [userId]);
+const purgeSessions = () => run('DELETE FROM sessions WHERE expires_at < ?', [Date.now()]);
 
 /* ----------------------------------------------------------- dons */
 
@@ -207,13 +229,13 @@ const DONATION_COLUMNS = `
   d.created_by, d.created_at, d.updated_by, d.updated_at,
   c.name AS created_by_name, e.name AS updated_by_name`;
 
-function hydrate(rows) {
+async function hydrate(rows) {
   if (!rows.length) return [];
   const ids = rows.map((r) => r.id);
   const marks = ids.map(() => '?').join(',');
-  const allocs = db.prepare(
+  const allocs = await all(
     `SELECT id, donation_id, name, amount, note FROM allocations
-     WHERE donation_id IN (${marks}) ORDER BY position, rowid`).all(...ids);
+     WHERE donation_id IN (${marks}) ORDER BY position, rowid`, ids);
 
   const byDon = new Map(ids.map((id) => [id, []]));
   allocs.forEach((a) => byDon.get(a.donation_id).push({
@@ -223,69 +245,76 @@ function hydrate(rows) {
 }
 
 /** @param {string|null} onlyUser  limite aux saisies d'un collecteur */
-function listDonations(onlyUser) {
+async function listDonations(onlyUser) {
   const sql = `SELECT ${DONATION_COLUMNS} FROM donations d
     LEFT JOIN users c ON c.id = d.created_by
     LEFT JOIN users e ON e.id = d.updated_by
     ${onlyUser ? 'WHERE d.created_by = ?' : ''}
     ORDER BY d.date DESC, d.created_at DESC`;
-  const rows = onlyUser ? db.prepare(sql).all(onlyUser) : db.prepare(sql).all();
-  return hydrate(rows);
+  return hydrate(await all(sql, onlyUser ? [onlyUser] : undefined));
 }
 
-function getDonation(id) {
-  const row = db.prepare(`SELECT ${DONATION_COLUMNS} FROM donations d
+async function getDonation(id) {
+  const row = await one(`SELECT ${DONATION_COLUMNS} FROM donations d
     LEFT JOIN users c ON c.id = d.created_by
     LEFT JOIN users e ON e.id = d.updated_by
-    WHERE d.id = ?`).get(id);
-  return row ? hydrate([row])[0] : null;
+    WHERE d.id = ?`, [id]);
+  return row ? (await hydrate([row]))[0] : null;
 }
 
-function saveDonation(don, userId, isUpdate) {
+/** Don et répartition écrits ensemble : jamais l'un sans l'autre. */
+async function saveDonation(don, userId, isUpdate) {
   const now = nowIso();
-  const tx = db.prepare('BEGIN');
-  tx.run();
+  const tx = await client.transaction('write');
   try {
     if (isUpdate) {
-      db.prepare(`UPDATE donations SET donor = ?, type = ?, type_other = ?, kind = ?, unit = ?,
-                  amount = ?, date = ?, note = ?, updated_by = ?, updated_at = ? WHERE id = ?`)
-        .run(don.donor, don.type, don.typeOther, don.kind, don.unit,
-             don.amount, don.date, don.note, userId, now, don.id);
-      db.prepare('DELETE FROM allocations WHERE donation_id = ?').run(don.id);
+      await tx.execute({
+        sql: `UPDATE donations SET donor = ?, type = ?, type_other = ?, kind = ?, unit = ?,
+              amount = ?, date = ?, note = ?, updated_by = ?, updated_at = ? WHERE id = ?`,
+        args: [don.donor, don.type, don.typeOther, don.kind, don.unit,
+               don.amount, don.date, don.note, userId, now, don.id]
+      });
+      await tx.execute({ sql: 'DELETE FROM allocations WHERE donation_id = ?', args: [don.id] });
     } else {
-      db.prepare(`INSERT INTO donations (id, donor, type, type_other, kind, unit,
-                  amount, date, note, created_by, created_at, updated_by, updated_at)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
-        .run(don.id, don.donor, don.type, don.typeOther, don.kind, don.unit,
-             don.amount, don.date, don.note, userId, now, userId, now);
+      await tx.execute({
+        sql: `INSERT INTO donations (id, donor, type, type_other, kind, unit,
+              amount, date, note, created_by, created_at, updated_by, updated_at)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        args: [don.id, don.donor, don.type, don.typeOther, don.kind, don.unit,
+               don.amount, don.date, don.note, userId, now, userId, now]
+      });
     }
-    const ins = db.prepare(`INSERT INTO allocations (id, donation_id, name, amount, note, position)
-                            VALUES (?, ?, ?, ?, ?, ?)`);
-    don.allocations.forEach((a, i) => ins.run(a.id || uid('ben'), don.id, a.name, a.amount, a.note || '', i));
-    db.prepare('COMMIT').run();
+    for (let i = 0; i < don.allocations.length; i++) {
+      const a = don.allocations[i];
+      await tx.execute({
+        sql: `INSERT INTO allocations (id, donation_id, name, amount, note, position)
+              VALUES (?, ?, ?, ?, ?, ?)`,
+        args: [a.id || uid('ben'), don.id, a.name, a.amount, a.note || '', i]
+      });
+    }
+    await tx.commit();
   } catch (err) {
-    db.prepare('ROLLBACK').run();
+    try { await tx.rollback(); } catch (_) { /* déjà fermée */ }
     throw err;
   }
   return getDonation(don.id);
 }
 
-const deleteDonation = (id) => db.prepare('DELETE FROM donations WHERE id = ?').run(id);
+const deleteDonation = (id) => run('DELETE FROM donations WHERE id = ?', [id]);
 
 /* ----------------------------------------------------------- journal */
 
-function logAction(user, action, entity, entityId, detail) {
-  db.prepare(`INSERT INTO audit (at, user_id, user_name, action, entity, entity_id, detail)
-              VALUES (?, ?, ?, ?, ?, ?, ?)`)
-    .run(nowIso(), user ? user.id : null, user ? user.name : 'système',
-         action, entity, entityId || null, detail || '');
-}
+const logAction = (user, action, entity, entityId, detail) =>
+  run(`INSERT INTO audit (at, user_id, user_name, action, entity, entity_id, detail)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [nowIso(), user ? user.id : null, user ? user.name : 'système',
+     action, entity, entityId || null, detail || '']);
 
 const listAudit = (limit) =>
-  db.prepare('SELECT * FROM audit ORDER BY id DESC LIMIT ?').all(Math.min(Number(limit) || 200, 1000));
+  all('SELECT * FROM audit ORDER BY id DESC LIMIT ?', [Math.min(Number(limit) || 200, 1000)]);
 
 module.exports = {
-  db, DB_FILE, DATA_DIR, uid, nowIso,
+  client, init, DB_FILE, DATA_DIR, IS_REMOTE, describeStorage, uid, nowIso,
   getSetting, setSetting, allSettings,
   listUsers, userByName, userById, createUser, updateUser, deleteUser, countAdmins,
   createSession, sessionUser, dropSession, dropUserSessions, purgeSessions,

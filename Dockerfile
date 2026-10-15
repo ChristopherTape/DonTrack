@@ -1,22 +1,24 @@
 # =========================================================================
-#  DonTrack — image de production
+#  DonTrack — image de production (version web uniquement)
 #
-#  L'application n'a aucune dépendance npm : ni installation, ni compilation.
-#  Node 24 est requis (le module intégré node:sqlite n'est disponible sans
-#  option qu'à partir de Node 23.4).
+#  Base Debian « slim » plutôt qu'Alpine : le client libSQL embarque un
+#  module natif dont les binaires précompilés visent la glibc.
 # =========================================================================
 
-FROM node:24-alpine
+FROM node:24-slim
 
 # tini : transmet correctement SIGTERM à Node lors des redémarrages
-RUN apk add --no-cache tini
+RUN apt-get update && apt-get install -y --no-install-recommends tini \
+ && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Seule la version web est hébergée. On n'embarque donc que le serveur,
-# ses pages, et le noyau métier partagé — ni le code Electron (src/main,
-# src/renderer) ni l'application Android.
-COPY package.json ./
+# Dépendances d'abord : cette couche est réutilisée tant qu'elles ne bougent pas.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# Seule la version web est hébergée : ni le code Electron (src/main,
+# src/renderer) ni l'application Android ne sont embarqués.
 COPY src/shared ./src/shared
 COPY web/server.js ./web/server.js
 COPY web/lib ./web/lib
@@ -29,14 +31,13 @@ ENV NODE_ENV=production \
     DONTRACK_HTTPS=1 \
     DONTRACK_TRUST_PROXY=1
 
-# La base vit sur un volume : elle survit aux redéploiements.
-RUN mkdir -p /data
+# Utilisé seulement si la base reste un fichier local (hébergeur avec volume).
+# Avec Turso, DONTRACK_DB_URL prend le relais et ce dossier reste vide.
+RUN mkdir -p /data && chown node:node /data
 VOLUME ["/data"]
 
+USER node
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=4s --start-period=10s --retries=3 \
-  CMD wget -qO- http://127.0.0.1:8080/health || exit 1
-
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["node", "web/server.js"]
